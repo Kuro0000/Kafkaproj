@@ -1,0 +1,41 @@
+services:
+  broker-leader:
+    build: .
+    container_name: kafka_leader
+    ports:
+      - "9092:9092"
+    environment:
+      - PORT=9092
+      - REPLICA_HOST=broker-replica
+      - REPLICA_PORT=9092
+    volumes:
+      - data_leader:/app/data
+
+  broker-replica:
+    build: .
+    container_name: kafka_replica
+    ports:
+      - "9093:9092"
+    environment:
+      - PORT=9092
+    volumes:
+      - data_replica:/app/data
+
+  producer:
+    build: .
+    container_name: kafka_producer
+    depends_on:
+      - broker-leader
+    command: ["./publisher", "broker-leader", "9092", "ordini", "Primo messaggio dal container Docker!", "ordine-42"]
+
+  consumer:
+    build: .
+    container_name: kafka_consumer
+    depends_on:
+      - broker-leader
+      - producer
+    command: ["./consumer", "broker-leader", "9092", "ordini", "0", "0"]
+
+volumes:
+  data_leader:
+  data_replica:
