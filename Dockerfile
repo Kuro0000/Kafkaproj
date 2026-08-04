@@ -6,3 +6,5 @@ RUN gcc -O2 -pthread kafka.c -o broker && gcc -O2 publisher.c -o publisher && gc
 FROM debian:bookworm-slim
 COPY --from=build /src/broker /src/publisher /src/consumer /app/
 WORKDIR /app
+EXPOSE 9092 9100
+CMD ["./broker"]

@@ -363,6 +363,31 @@ void handle_fetch(int client_fd, const char *topic) {
     }
     fclose(log);
 }
+void handleCommit(int client_fd, const char *topic) {
+    uint32_t id = 0;
+    if (read(client_fd, &id, sizeof(uint32_t)) != sizeof(uint32_t)) {
+        return;
+    }
+    if (id >= PARTITIONS_PER_TOPIC) {
+        return;
+    }
+    uint64_t committed_offset = 0;
+    if (read(client_fd, &committed_offset, sizeof(uint64_t)) != sizeof(uint64_t)) {
+        return;
+    }
+
+    Partition *partition = get_partition(topic, id);
+    if (partition == NULL) {
+        return;
+    }
+
+    pthread_mutex_lock(&partition->lock);
+        if (committed_offset > partition->committed)
+            partition->committed = committed_offset;
+    pthread_mutex_unlock(&partition->lock);
+
+    write(client_fd, &committed_offset, sizeof(uint64_t));
+}
 
 void *clientHandler(void *arg) {
         int client_fd = *(int *)arg;
@@ -397,30 +422,6 @@ void *clientHandler(void *arg) {
         return NULL;
 }
 
-void handleCommit(int client_fd, const char *topic) {
-    uint32_t id = 0;
-    if (read(client_fd, &id, sizeof(uint32_t)) != sizeof(uint32_t)) {
-        return;
-    }
-    if (id >= PARTITIONS_PER_TOPIC) {
-        return;
-    }
-    uint64_t committed_offset = 0;
-    if (read(client_fd, &committed_offset, sizeof(uint64_t)) != sizeof(uint64_t)) {
-        return;
-    }
-
-    Partition *partition = get_partition(topic, id);
-    if (partition == NULL) {
-        return;
-    }
-
-    pthread_mutex_lock(&partition->lock);
-    partition->committed = committed_offset;
-    pthread_mutex_unlock(&partition->lock);
-
-    write(client_fd, &committed_offset, sizeof(uint64_t));
-}
 
 
 void *metricsHandler(void *args){
@@ -444,8 +445,8 @@ void *metricsHandler(void *args){
     
     if (listen(server_fd, 3) < 0) exit(EXIT_FAILURE);
     char request_buffer[1024];
-    char response[1024];
-    char header[254] = 0;
+    char response[65536];
+    char header[254] = {0};
     for(;;) {
         if ((client_fd =accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))< 0) 
             continue;
@@ -476,9 +477,9 @@ void *metricsHandler(void *args){
                 "kafka_consumer_lag{topic=\"%s\",partition=\"%d\"} %lu\n",
                 p->topic, p->id, p->produce_count,
                 p->topic, p->id, p->fetch_count,
-                p->topic, p->id, p->next - 1,
+                p->topic, p->id, p->next,
                 p->topic, p->id, p->committed,
-                p->topic, p->id, (p->next > p->committed) ? (p->next - 1 - p->committed) : 0);
+                p->topic, p->id, (p->next > p->committed) ? (p->next-p->committed) : 0);
             pthread_mutex_unlock(&p->lock);
             if (n > 0 && (size_t)n < sizeof(response) - pos)
                 pos += n;
