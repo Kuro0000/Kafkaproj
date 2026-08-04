@@ -7,7 +7,6 @@ metadata:
 spec:
   clusterIP: None
   selector:
-    matchLabels:
       app: kafka
   ports:
     - name: kafka
@@ -18,7 +17,7 @@ spec:
       targetPort: 9100
 
 ---
-apiVersion: app/v1
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: kafka
@@ -51,21 +50,19 @@ spec:
               exec ./broker
           ports:
             - name: kafka
-              port: 9092
-              targetPort: 9092
+              containerPort: 9092
             - name: metrics
-              port: 9100
-              targetPort: 9100
+              containerPort: 9100
           readinessProbe:
             tcpSocket:
                 port: 9092
             initialDelaySeconds: 2
             periodSeconds: 5
-            livenessProbe:
-              tcpSocket:
-                port: 9092
-              initialDelaySeconds: 10
-              periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 10
+            periodSeconds: 10
           resources:
             requests:
               cpu: "100m"
@@ -76,11 +73,11 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /app/data
-volumeClaimsTemplate:
-  - metadata:
-      name: data
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      resources:
-        requests:
-          storage: 1Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi
