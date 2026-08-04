@@ -385,6 +385,11 @@ void *clientHandler(void *arg) {
 }
 
 
+void *metricsHandler(void *args){
+
+}
+
+
 int main() {
     int server_fd, client_fd;
     struct sockaddr_in address;
@@ -413,6 +418,12 @@ int main() {
     if (listen(server_fd, 3) < 0) exit(EXIT_FAILURE);
 
     printf("Server Multi-Topic in ascolto sulla porta %d...\n\n", server_port);
+    pthread_t prometheus_thread;
+    if (pthread_create(&prometheus_thread, NULL, metricsHandler, NULL) != 0) {
+        perror("Errore creazione thread metriche");
+    } else {
+        pthread_detach(prometheus_thread); // Lo stacchiamo, andrà avanti in background
+    }
     //thread per i client
         pthread_t thread;
 
