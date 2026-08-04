@@ -16,6 +16,7 @@
 #define PORT 9092
 #define CMD_PRODUCE 0x01
 #define CMD_FETCH   0x02
+#define CMD_COMMIT  0x03
 #define INDEX_INTERVAL 3 
 #define MAX_PARTITIONS 100
 #define PARTITIONS_PER_TOPIC 5
@@ -35,6 +36,9 @@ typedef struct {
     char topic[64];
     int id;
     uint64_t next;
+    uint64_t committed;
+    uint64_t produce_count;
+    uint64_t fetch_count;
     pthread_mutex_t lock;
 } Partition;
 
@@ -198,6 +202,7 @@ int64_t append_message_to_topic(const char *topic,int id, const char *payload) {
     fwrite(payload, sizeof(char), len, log);
     fclose(log);
     partition->next++;
+    partition->produce_count++;
     // aggiornamento dell'indice
     if(prossimo_id % INDEX_INTERVAL == 0) {
         FILE *idx_file = fopen(index_file_path, "ab");
@@ -318,6 +323,9 @@ void handle_fetch(int client_fd, const char *topic) {
         return;
     }
         Partition *partition = get_partition(topic, id);
+        pthread_mutex_lock(&partition->lock);
+        partition->fetch_count++;
+        pthread_mutex_unlock(&partition->lock);
         if (partition == NULL) {
             return;
         }
@@ -375,6 +383,11 @@ void *clientHandler(void *arg) {
                     else if (opcode == CMD_FETCH) {
                         printf("-> FETCH dal topic: '%s'\n", topic_name);
                         handle_fetch(client_fd, topic_name);
+                    }else if (opcode == CMD_COMMIT) {
+                        printf("-> COMMIT sul topic: '%s'\n", topic_name);
+                        handleCommit(client_fd, topic_name);
+                    } else {
+                        printf("Comando non riconosciuto: %d\n", opcode);
                     }
                 }
                 free(topic_name);
@@ -382,6 +395,31 @@ void *clientHandler(void *arg) {
         }
         close(client_fd);
         return NULL;
+}
+
+void handleCommit(int client_fd, const char *topic) {
+    uint32_t id = 0;
+    if (read(client_fd, &id, sizeof(uint32_t)) != sizeof(uint32_t)) {
+        return;
+    }
+    if (id >= PARTITIONS_PER_TOPIC) {
+        return;
+    }
+    uint64_t committed_offset = 0;
+    if (read(client_fd, &committed_offset, sizeof(uint64_t)) != sizeof(uint64_t)) {
+        return;
+    }
+
+    Partition *partition = get_partition(topic, id);
+    if (partition == NULL) {
+        return;
+    }
+
+    pthread_mutex_lock(&partition->lock);
+    partition->committed = committed_offset;
+    pthread_mutex_unlock(&partition->lock);
+
+    write(client_fd, &committed_offset, sizeof(uint64_t));
 }
 
 
@@ -405,15 +443,55 @@ void *metricsHandler(void *args){
     exit(EXIT_FAILURE);
     
     if (listen(server_fd, 3) < 0) exit(EXIT_FAILURE);
-
+    char request_buffer[1024];
     char response[1024];
-    int offset = 0;
+    int header = 0;
     for(;;) {
         if ((client_fd =accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))< 0) 
             continue;
+        memset(request_buffer, 0, sizeof(request_buffer));
+        read(client_fd, request_buffer, sizeof(request_buffer) - 1);
 
- 
-        write(client_fd, response, strlen(response));
+        size_t pos = 0;
+        int n =snprintf(response + pos, sizeof(response) - pos,
+            "# TYPE kafka_produce_total counter\n"
+            "# TYPE kafka_fetch_total counter\n"
+            "# TYPE kafka_partition_high_watermark gauge\n"
+            "# TYPE kafka_partition_committed_offset gauge\n"
+            "# TYPE kafka_consumer_lag gauge\n");
+        if (n > 0 && (size_t)n < sizeof(response) - pos)
+            pos += n;
+        pthread_mutex_lock(&partition_manager_lock);
+        int count = partition_count;
+        pthread_mutex_unlock(&partition_manager_lock);
+
+        for(int i = 0; i < count; i++) {
+            Partition *p = &partitions[i];
+            pthread_mutex_lock(&p->lock);
+            n = snprintf(response + pos, sizeof(response) - pos,
+                "kafka_produce_total{topic=\"%s\",partition=\"%d\"} %lu\n"
+                "kafka_fetch_total{topic=\"%s\",partition=\"%d\"} %lu\n"
+                "kafka_partition_high_watermark{topic=\"%s\",partition=\"%d\"} %lu\n"
+                "kafka_partition_committed_offset{topic=\"%s\",partition=\"%d\"} %lu\n"
+                "kafka_consumer_lag{topic=\"%s\",partition=\"%d\"} %lu\n",
+                p->topic, p->id, p->produce_count,
+                p->topic, p->id, p->fetch_count,
+                p->topic, p->id, p->next - 1,
+                p->topic, p->id, p->committed,
+                p->topic, p->id, (p->next > p->committed) ? (p->next - 1 - p->committed) : 0);
+            pthread_mutex_unlock(&p->lock);
+            if (n > 0 && (size_t)n < sizeof(response) - pos)
+                pos += n;
+        }
+        
+        int hlen = snprintf(header, sizeof(header),
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain; version=0.0.4; charset=utf-8\r\n"
+            "Content-Length: %zu\r\n"
+            "Connection: close\r\n"
+            "\r\n", pos);
+        write(client_fd, header, hlen);
+        write(client_fd, response, pos);
         close(client_fd);
     }
     return NULL;
