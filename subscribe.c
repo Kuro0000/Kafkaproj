@@ -10,6 +10,7 @@
 #include <stdint.h>
 
 #define CMD_FETCH 0x02
+#define CMD_COMMIT 0x03
 
 typedef struct {
     uint64_t offset;
@@ -70,8 +71,15 @@ int main(int argc, char *argv[]) {
 
         read(sock, payload, header.length);
         payload[header.length] = '\0';
+
         printf("[Ricevuto] Offset: %lu -> Contenuto: %s\n", header.offset, payload);
         free(payload);
+        uint64_t next_offset = header.offset + 1;
+        uint8_t commit = CMD_COMMIT;
+        write(sock, &topic_len, 1);
+        write(sock, topic, topic_len);
+        write(sock, &partition, sizeof(uint32_t));
+        write(sock, &commit, sizeof(uint8_t));
     }
 
     close(sock);
