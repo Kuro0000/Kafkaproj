@@ -445,7 +445,7 @@ void *metricsHandler(void *args){
     if (listen(server_fd, 3) < 0) exit(EXIT_FAILURE);
     char request_buffer[1024];
     char response[1024];
-    int header = 0;
+    char header[254] = 0;
     for(;;) {
         if ((client_fd =accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))< 0) 
             continue;
@@ -483,7 +483,7 @@ void *metricsHandler(void *args){
             if (n > 0 && (size_t)n < sizeof(response) - pos)
                 pos += n;
         }
-        
+
         int hlen = snprintf(header, sizeof(header),
             "HTTP/1.1 200 OK\r\n"
             "Content-Type: text/plain; version=0.0.4; charset=utf-8\r\n"
