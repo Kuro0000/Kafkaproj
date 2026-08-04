@@ -388,7 +388,8 @@ void handleCommit(int client_fd, const char *topic) {
             partition->committed = committed_offset;
     pthread_mutex_unlock(&partition->lock);
 
-    write(client_fd, &committed_offset, sizeof(uint64_t));
+    uint8_t ack = 1;
+    write(client_fd, &ack, 1);
 }
 
 void *clientHandler(void *arg) {
