@@ -1,4 +1,4 @@
-# MyOwnKafka
+# kafkaproj
 
 A Kafka-style messaging broker implemented in C, designed to run in a containerized Docker environment, featuring support for partitions, binary indexing, replication, and custom clients (`publisher` and `consumer`).
 

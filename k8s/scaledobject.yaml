@@ -1,0 +1,23 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: consumer-lag-scaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: consumer
+
+  minReplicaCount: 1
+  maxReplicaCount: 5
+
+  pollingInterval: 15
+  cooldownPeriod: 60
+
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://monitoring-kube-prometheus-prometheus.default.svc.cluster.local:9090
+        metricName: kafka_consumer_lag_totale
+        query: sum(kafka_consumer_lag{pod="kafka-0",topic="ordini"})
+        threshold: "50"
