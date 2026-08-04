@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <stdint.h>
+#include <signal.h>
 
 #define CMD_PRODUCE 0x01
 #define DEFAULT_PARTITION 0
@@ -18,7 +19,8 @@ int main(int argc, char *argv[]) {
         printf("  [partizione] e' opzionale (default: 0)\n");
         return 1;
     }
-
+    signal(SIGPIPE, SIG_IGN);
+    setvbuf(stdout, NULL, _IOLBF, 0);
     char *host = argv[1];
     char *port_str = argv[2];
     char *topic = argv[3];

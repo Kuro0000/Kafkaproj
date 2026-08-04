@@ -8,6 +8,8 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <stdint.h>
+#include <signal.h>
+
 
 #define CMD_FETCH 0x02
 #define CMD_COMMIT 0x03
@@ -22,6 +24,8 @@ int main(int argc, char *argv[]) {
         printf("Uso: %s <host> <porta> <topic> <partizione> <offset_iniziale>\n", argv[0]);
         return 1;
     }
+    signal(SIGPIPE, SIG_IGN);
+    setvbuf(stdout, NULL, _IOLBF, 0);
     char *host=argv[1];
     char *port_str=argv[2];
     char *topic =argv[3];
@@ -38,20 +42,20 @@ int main(int argc, char *argv[]) {
 
         if (getaddrinfo(host, port_str, &hints, &res) != 0) {
             perror("Risoluzione host fallita");
-            return 1;
+            continue;
         }
         sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
         if (sock < 0) {
             freeaddrinfo(res);
             perror("Creazione socket fallita");
-            return 1;
+            continue;
         }
 
         if (connect(sock, res->ai_addr, res->ai_addrlen) < 0) {
             close(sock);
             freeaddrinfo(res);
             perror("Connessione al broker fallita");
-            return 1;
+            continue;
         }
         freeaddrinfo(res);
 

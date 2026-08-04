@@ -12,6 +12,8 @@
 #include <errno.h>
 #include <pthread.h>
 #include <netdb.h>
+#include <signal.h>
+
 
 #define PORT 9092
 #define CMD_PRODUCE 0x01
@@ -516,7 +518,8 @@ int main() {
     
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) 
         exit(EXIT_FAILURE);
-
+    signal(SIGPIPE, SIG_IGN);
+    setvbuf(stdout, NULL, _IOLBF, 0);
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(server_port);
