@@ -17,20 +17,33 @@ spec:
         - name: publisher
           image: publisher:latest
           imagePullPolicy: IfNotPresent
-          command: ["./publisher", "kafka", "9092", "ordini", "Primo messaggio dal container Kubernetes!", "ordine-42"]
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              i=0
+              while true; do
+                i=$((i+1))
+                ./publisher kafka-0.kafka 9092 ordini "ordine numero $i da $(hostname)" 0
+                sleep 1
+              done
           resources:
-          requests:
-            cpu: "100m"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: producer-hpa
+  name: publisher-hpa
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: producer
+    name: publisher
   minReplicas: 1
   maxReplicas: 5
   metrics:

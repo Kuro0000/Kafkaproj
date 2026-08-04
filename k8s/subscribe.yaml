@@ -14,6 +14,20 @@ spec:
     spec:
       containers:
       - name: consumer
-        image: tuo-nome-immagine-broker:latest
+        image: kafkaproj:latest
         imagePullPolicy: IfNotPresent
+        args:
+          - "kafka-0.kafka"
+          - "9092"
+          - "ordini"
+          - "0"
+          - "0"
+          - "2"
         command: ["/app/consumer"]
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "32Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
